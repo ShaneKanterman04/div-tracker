@@ -7,7 +7,7 @@ A React-based stock portfolio app that integrates with the Robinhood API to prov
 ## 🚀 Features
 
 - 📈 **See Portfolio Value**  
-  View your entire portfolio’s current value at a glance.
+  View your entire portfolio's current value at a glance.
 
 - 💰 **Upcoming Dividend Payouts**  
   Get a list of expected dividend payouts for your holdings.
@@ -36,7 +36,9 @@ A React-based stock portfolio app that integrates with the Robinhood API to prov
 ## 🛠️ Tech Stack & Resources
 
 - **Frontend**: [React](https://reactjs.org/)
-- **Stock Data API**: [Robinhood NPM Package](https://www.npmjs.com/package/robinhood)
+- **Trading API**: [Robinhood NPM Package](https://www.npmjs.com/package/robinhood) (For executing trades)
+- **Stock Data API**: [Alpha Vantage](https://www.alphavantage.co/documentation/) (For stock data)
+- **Charts**: [Victory](https://commerce.nearform.com/open-source/victory/docs/charts/candlestick) (For candlestick charts)
 
 ---
 

@@ -3,6 +3,9 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --glow-color: rgba(255, 255, 255, 0.6);
+  --glow-spread: 25px;
+  --glow-blur: 30px;
 }
 
 @theme inline {
@@ -16,6 +19,9 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --glow-color: rgba(255, 255, 255, 0.6);
+    --glow-spread: 5px;
+    --glow-blur: 10px;
   }
 }
 
@@ -23,4 +29,29 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Larger white glow effect */
+.login-glow {
+  box-shadow: 0 0 var(--glow-blur) var(--glow-spread) var(--glow-color);
+}
+
+/* Slow pulse animation for the enhanced glow effect */
+@keyframes pulse-slow {
+  0%, 100% {
+    box-shadow: 0 0 var(--glow-blur) var(--glow-spread) var(--glow-color);
+  }
+  50% {
+    box-shadow: 0 0 calc(var(--glow-blur) * 1.5) calc(var(--glow-spread) * 1.5) var(--glow-color);
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 5s infinite;
+}
+
+/* Force dark mode for glow effect to work best */
+.dark-theme {
+  background-color: #050505;
+  color: #ffffff;
 }
