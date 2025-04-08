@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Stock Portfolio App
 
-## Getting Started
+A React-based stock portfolio app that integrates with the Robinhood API to provide users with an easy way to manage and track their investments.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🚀 Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- 📈 **See Portfolio Value**  
+  View your entire portfolio’s current value at a glance.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- 💰 **Upcoming Dividend Payouts**  
+  Get a list of expected dividend payouts for your holdings.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- 🔄 **Buy/Sell Stocks**  
+  Trade stocks directly from your portfolio.
 
-## Learn More
+- 🧮 **Show Estimated Dividend Before Purchase**  
+  Preview potential dividend earnings before buying a stock.
 
-To learn more about Next.js, take a look at the following resources:
+- 🧺 **Basket Investing**  
+  Group multiple stocks into a single basket to trade them as one investment.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🔁 User Flow
 
-## Deploy on Vercel
+1. User enters their **API key** on the homepage.
+2. On the **Portfolio Page**, users can:
+   - View individual holdings and baskets.
+   - Buy/sell stocks.
+   - Create and manage baskets.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🛠️ Tech Stack & Resources
+
+- **Frontend**: [React](https://reactjs.org/)
+- **Stock Data API**: [Robinhood NPM Package](https://www.npmjs.com/package/robinhood)
+
+---
+
+## 📌 Notes
+
+- This app uses the [Robinhood unofficial API](https://www.npmjs.com/package/robinhood) — use with caution and ensure your API key is secured.
