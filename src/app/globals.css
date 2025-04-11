@@ -1,11 +1,25 @@
 @import "tailwindcss";
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
   --glow-color: rgba(255, 255, 255, 0.6);
   --glow-spread: 25px;
   --glow-blur: 30px;
+
+  /* Customizable gradient colors */
+  --gradient-color-1: rgba(0, 0, 0, 0.9);
+  --gradient-color-2: rgba(30, 30, 30, 0.8);
+  --gradient-glow-opacity: 0.6;
+  
+  /* Other global variables */
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 13, 17, 23;
+  --background-end-rgb: 0, 0, 0;
 }
 
 @theme inline {
@@ -26,9 +40,14 @@
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+    to bottom,
+    rgb(var(--background-start-rgb)),
+    rgb(var(--background-end-rgb))
+  );
+  position: relative;
+  overflow-x: hidden;
 }
 
 /* Larger white glow effect */
@@ -54,4 +73,55 @@ body {
 .dark-theme {
   background-color: #050505;
   color: #ffffff;
+}
+
+/* Gradient background with glow effect */
+.gradient-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  background: linear-gradient(
+    135deg,
+    var(--gradient-color-1) 0%,
+    var(--gradient-color-2) 100%
+  );
+}
+
+/* Add glow effect */
+.gradient-background::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, var(--gradient-glow-opacity)) 0%,
+    transparent 60%
+  );
+  opacity: 0.15;
+  pointer-events: none;
+}
+
+/* Make the app container transparent to show the background */
+main {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+
+/* Improve readability of content over gradient */
+.bg-gray-900 {
+  background-color: rgba(17, 24, 39, 0.85);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.bg-gray-800 {
+  background-color: rgba(31, 41, 55, 0.85);
+  backdrop-filter: blur(5px);
 }

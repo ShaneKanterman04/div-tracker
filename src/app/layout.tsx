@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Div Tracker",
-  description: "A simple tool to track your divs",
+  title: "DivTrack",
+  description: "Track your dividend investments and portfolio performance",
 };
 
 export default function RootLayout({
@@ -25,13 +25,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased dark-theme`}
-      >
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased dark-theme`}>
+        <div className="gradient-background"></div>
         <AuthProvider>
-          <div className="flex flex-col items-center justify-center min-h-screen p-4">
+          <main className="min-h-screen bg-transparent flex flex-col items-center">
             {children}
-          </div>
+          </main>
         </AuthProvider>
       </body>
     </html>
