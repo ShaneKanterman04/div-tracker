@@ -5,14 +5,21 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { useAuth } from "@/context/AuthContext";
 import PortfolioChart from "@/components/PortfolioChart";
 import StockStats from "@/components/StockStats";
-import { fetchStockData, StockDataPoint } from "@/services/stockApi";
+import { StockDataPoint } from "@/services/stockApi";
+import { 
+  fetchStockData, 
+  getQuote, 
+  verifyApiConnection,
+  setupRealTimeUpdates,
+  AlpacaQuote
+} from "@/services/alpacaApi";
 import Link from "next/link";
 
 // Available time ranges
 type TimeRange = '1D' | '1W' | '1M' | '3M' | '1Y' | 'MAX';
 
 export default function Market() {
-  const { apiKey, logout } = useAuth();
+  const { logout } = useAuth();
   const [stockData, setStockData] = useState<StockDataPoint[]>([]);
   const [tickerSymbol, setTickerSymbol] = useState<string | null>(null);
   const [tickerInput, setTickerInput] = useState("");
@@ -20,97 +27,154 @@ export default function Market() {
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>('1M');
   const [currentPrice, setCurrentPrice] = useState<number>(0);
+  const [quoteData, setQuoteData] = useState<AlpacaQuote | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [quantity, setQuantity] = useState<string>("1");
   const [orderType, setOrderType] = useState<"buy" | "sell">("buy");
+  const [apiConnected, setApiConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Initialize with a default stock (optional)
-    if (process.env.NODE_ENV === 'development') {
-      console.log("Market component mounted");
+    // Check API connection on component mount
+    async function checkApiConnection() {
+      try {
+        const isConnected = await verifyApiConnection();
+        setApiConnected(isConnected);
+
+        if (!isConnected) {
+          setError("Could not connect to the Alpaca API. Please check your API key and secret.");
+        }
+      } catch (err) {
+        console.error("API connection check failed:", err);
+        setApiConnected(false);
+        setError("Failed to verify API connection");
+      }
     }
+
+    checkApiConnection();
   }, []);
-  
+
+  // Set up real-time updates when a ticker is selected
+  useEffect(() => {
+    if (!tickerSymbol) return;
+
+    // Set up polling for real-time updates
+    const cleanup = setupRealTimeUpdates(tickerSymbol, (price) => {
+      setCurrentPrice(price);
+      setLastUpdated(new Date());
+    });
+
+    // Clean up on unmount or when ticker changes
+    return cleanup;
+  }, [tickerSymbol]);
+
   const handleTickerSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!tickerInput.trim()) return;
-    
+
+    // Don't proceed if API connection is known to be failing
+    if (apiConnected === false) {
+      setError("Cannot search stocks: API connection is not available");
+      return;
+    }
+
     const ticker = tickerInput.toUpperCase();
     setError(null);
     setIsLoading(true);
-    
+    setStockData([]); // Clear previous data
+
     try {
+      // First get the current quote
+      const quote = await getQuote(ticker);
+      
+      // Then get historical data
       const data = await fetchStockData(ticker, timeRange);
+
+      // Validate we have actual data
+      if (!data || data.length === 0) {
+        throw new Error("No data available for this ticker");
+      }
+
+      // Update state with the results
       setTickerSymbol(ticker);
       setStockData(data);
-      
-      if (data.length > 0) {
-        setCurrentPrice(data[data.length - 1].close);
-        setLastUpdated(new Date());
-      }
-    } catch (err) {
+      setCurrentPrice(quote.price);
+      setQuoteData(quote);
+      setLastUpdated(quote.timestamp);
+
+      // API is working if we got here
+      setApiConnected(true);
+    } catch (err: any) {
       console.error("Error fetching stock data:", err);
-      setError(`Could not load data for "${ticker}". Please check the ticker symbol and try again.`);
+      
+      const errorMessage = err.message || 'Unknown error occurred';
+      setError(`Could not load data for "${ticker}". ${errorMessage}`);
+      
+      setStockData([]);
+      setCurrentPrice(0);
+      setTickerSymbol(null);
+      setQuoteData(null);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleTimeRangeChange = (range: TimeRange) => {
+  const handleTimeRangeChange = async (range: TimeRange) => {
     if (!tickerSymbol) return;
-    
+
     setTimeRange(range);
     setIsLoading(true);
-    
-    fetchStockData(tickerSymbol, range)
-      .then(data => {
-        setStockData(data);
-        
-        if (data.length > 0) {
-          setCurrentPrice(data[data.length - 1].close);
-          setLastUpdated(new Date());
-        }
-        
-        setIsLoading(false);
-      })
-      .catch(err => {
-        console.error("Error fetching stock data:", err);
-        setError(`Could not load ${range} data for "${tickerSymbol}".`);
-        setIsLoading(false);
-      });
-  };
-  
-  // Get previous close for price comparison (last value from previous day)
-  const getPreviousClose = (): number => {
-    if (stockData.length === 0) return 0;
-    
-    // For intraday, use the open price as reference
-    if (timeRange === '1D') {
-      return stockData[0].open;
+
+    try {
+      const data = await fetchStockData(tickerSymbol, range);
+
+      // Validate we have actual data
+      if (!data || data.length === 0) {
+        throw new Error("No data available for this time range");
+      }
+
+      setStockData(data);
+      
+      // Don't update current price when just changing time range
+      // The real-time updater will handle that
+    } catch (err: any) {
+      console.error("Error fetching stock data:", err);
+      const errorMessage = err.message || 'Unknown error occurred';
+      setError(`Could not load ${range} data for "${tickerSymbol}". ${errorMessage}`);
+    } finally {
+      setIsLoading(false);
     }
-    
-    // For other time ranges, use the second-to-last day's close
-    return stockData.length > 1 ? stockData[stockData.length - 2].close : 0;
   };
-  
+
+  // Get previous close for price comparison
+  const getPreviousClose = (): number => {
+    return quoteData?.previousClose || 0;
+  };
+
   // Get daily high and low
   const getDayRange = () => {
+    if (quoteData) {
+      return { 
+        high: quoteData.high || 0, 
+        low: quoteData.low || 0 
+      };
+    }
+    
     if (stockData.length === 0) return { high: 0, low: 0 };
     
-    // For intraday, get from the dataset
+    // If quote data doesn't have high/low, try to get from stock data
     if (timeRange === '1D') {
       let high = -Infinity;
       let low = Infinity;
-      
+
       stockData.forEach(point => {
         high = Math.max(high, point.high);
         low = Math.min(low, point.low);
       });
-      
+
       return { high, low };
     }
-    
+
     // For other time ranges, use the last data point
     const lastPoint = stockData[stockData.length - 1];
     return { high: lastPoint.high, low: lastPoint.low };
@@ -118,15 +182,15 @@ export default function Market() {
 
   const handleTrade = () => {
     if (!tickerSymbol || !currentPrice) return;
-    
+
     const parsedQuantity = parseInt(quantity);
     if (isNaN(parsedQuantity) || parsedQuantity <= 0) {
       setError("Please enter a valid quantity");
       return;
     }
-    
+
     const tradeValue = currentPrice * parsedQuantity;
-    
+
     // TODO: Implement actual trade logic with API
     alert(`${orderType.toUpperCase()} order placed successfully:
       Ticker: ${tickerSymbol}
@@ -160,7 +224,19 @@ export default function Market() {
           <h2 className="text-xl font-medium text-white mb-4">
             Stock Lookup
           </h2>
-          
+
+          {apiConnected === false && (
+            <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
+              <p className="font-semibold">API Connection Error</p>
+              <p>The application cannot connect to the Alpaca API. Please verify:</p>
+              <ul className="list-disc pl-5 mt-1">
+                <li>Your API key and secret are correct in the .env.local file</li>
+                <li>Your Alpaca account is active</li>
+                <li>The API service is currently available</li>
+              </ul>
+            </div>
+          )}
+
           <div className="mb-4">
             <form onSubmit={handleTickerSearch} className="flex gap-2">
               <input
@@ -181,14 +257,14 @@ export default function Market() {
                 {isLoading ? 'Loading...' : 'Search'}
               </button>
             </form>
-            
+
             {error && (
               <div className="mt-2 text-red-400 text-sm">
                 {error}
               </div>
             )}
           </div>
-          
+
           {tickerSymbol && (
             <>
               {/* Time Range Selection */}
@@ -209,7 +285,7 @@ export default function Market() {
                   </button>
                 ))}
               </div>
-              
+
               {isLoading ? (
                 <div className="bg-gray-800 rounded-lg p-8 flex justify-center items-center">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
@@ -220,7 +296,7 @@ export default function Market() {
                     data={stockData} 
                     title={`${tickerSymbol} (${timeRange})`}
                   />
-                  
+
                   {stockData.length > 0 && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
                       <div className="lg:col-span-2">
@@ -235,10 +311,10 @@ export default function Market() {
                           lastUpdated={lastUpdated}
                         />
                       </div>
-                      
+
                       <div className="bg-gray-800 rounded-lg p-4">
                         <h3 className="text-lg font-medium text-white mb-4">Trade {tickerSymbol}</h3>
-                        
+
                         <div className="mb-4">
                           <label htmlFor="order-type" className="block text-sm font-medium text-gray-300 mb-1">
                             Order Type
@@ -268,7 +344,7 @@ export default function Market() {
                             </button>
                           </div>
                         </div>
-                        
+
                         <div className="mb-4">
                           <label htmlFor="quantity" className="block text-sm font-medium text-gray-300 mb-1">
                             Quantity
@@ -282,7 +358,7 @@ export default function Market() {
                             className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
-                        
+
                         <div className="mb-6">
                           <div className="flex justify-between text-sm mb-1">
                             <span className="text-gray-400">Market Price:</span>
@@ -293,7 +369,7 @@ export default function Market() {
                             <span className="text-white">${(currentPrice * parseInt(quantity || "0")).toFixed(2)}</span>
                           </div>
                         </div>
-                        
+
                         <button
                           type="button"
                           onClick={handleTrade}
