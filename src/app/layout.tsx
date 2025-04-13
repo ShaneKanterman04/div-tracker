@@ -30,6 +30,9 @@ export default function RootLayout({
         <AuthProvider>
           <main className="min-h-screen bg-transparent flex flex-col items-center">
             {children}
+            <footer className="w-full py-4 text-center text-sm text-gray-400 mt-auto">
+              Powered by Alpaca
+            </footer>
           </main>
         </AuthProvider>
       </body>

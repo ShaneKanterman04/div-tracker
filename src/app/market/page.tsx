@@ -5,14 +5,12 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { useAuth } from "@/context/AuthContext";
 import PortfolioChart from "@/components/PortfolioChart";
 import StockStats from "@/components/StockStats";
-import { StockDataPoint } from "@/services/stockApi";
 import { 
-  fetchMockStockData, 
-  getMockQuote, 
-  verifyMockApiConnection,
-  setupMockRealTimeUpdates,
-  MockQuote
-} from "@/services/mockStockApi";
+  fetchStockData, 
+  getQuote, 
+  PortfolioDataPoint, 
+  AlpacaQuote
+} from "@/services/alpacaApi";
 import Link from "next/link";
 
 // Available time ranges
@@ -20,29 +18,27 @@ type TimeRange = '1D' | '1W' | '1M' | '3M' | '1Y' | 'MAX';
 
 export default function Market() {
   const { logout } = useAuth();
-  const [stockData, setStockData] = useState<StockDataPoint[]>([]);
+  const [stockData, setStockData] = useState<PortfolioDataPoint[]>([]);
   const [tickerSymbol, setTickerSymbol] = useState<string | null>(null);
   const [tickerInput, setTickerInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>('1M');
-  const [currentPrice, setCurrentPrice] = useState<number>(0);
-  const [quoteData, setQuoteData] = useState<MockQuote | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [quoteData, setQuoteData] = useState<AlpacaQuote | null>(null);
   const [quantity, setQuantity] = useState<string>("1");
   const [orderType, setOrderType] = useState<"buy" | "sell">("buy");
   const [apiConnected, setApiConnected] = useState<boolean | null>(null);
+
+  // Determine if view is intraday (1D)
+  const isIntraday = timeRange === '1D';
 
   useEffect(() => {
     // Check API connection on component mount
     async function checkApiConnection() {
       try {
-        const isConnected = await verifyMockApiConnection();
-        setApiConnected(isConnected);
-
-        if (!isConnected) {
-          setError("Could not connect to the mock API.");
-        }
+        // Try to fetch a known ticker like AAPL to verify connection
+        await getQuote("AAPL");
+        setApiConnected(true);
       } catch (err) {
         console.error("API connection check failed:", err);
         setApiConnected(false);
@@ -52,20 +48,6 @@ export default function Market() {
 
     checkApiConnection();
   }, []);
-
-  // Set up real-time updates when a ticker is selected
-  useEffect(() => {
-    if (!tickerSymbol) return;
-
-    // Set up polling for real-time updates
-    const cleanup = setupMockRealTimeUpdates(tickerSymbol, (price) => {
-      setCurrentPrice(price);
-      setLastUpdated(new Date());
-    });
-
-    // Clean up on unmount or when ticker changes
-    return cleanup;
-  }, [tickerSymbol]);
 
   const handleTickerSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,34 +67,20 @@ export default function Market() {
 
     try {
       // First get the current quote
-      const quote = await getMockQuote(ticker);
+      const quote = await getQuote(ticker);
       
       // Then get historical data
-      const data = await fetchMockStockData(ticker, timeRange);
+      const data = await fetchStockData(ticker, timeRange);
 
       // Validate we have actual data
       if (!data || data.length === 0) {
         throw new Error("No data available for this ticker");
       }
 
-      // Ensure that timestamp is properly converted to Date and mapped to 'x' for chart
-      const formattedData = data.map(point => ({
-        x: new Date(point.timestamp),
-        open: point.open,
-        close: point.close,
-        high: point.high,
-        low: point.low
-      }));
-
-      // Sort chronologically to ensure proper display
-      formattedData.sort((a, b) => a.x.getTime() - b.x.getTime());
-
       // Update state with the results
       setTickerSymbol(ticker);
-      setStockData(formattedData);
-      setCurrentPrice(quote.price);
+      setStockData(data);
       setQuoteData(quote);
-      setLastUpdated(quote.timestamp);
 
       // API is working if we got here
       setApiConnected(true);
@@ -123,7 +91,6 @@ export default function Market() {
       setError(`Could not load data for "${ticker}". ${errorMessage}`);
       
       setStockData([]);
-      setCurrentPrice(0);
       setTickerSymbol(null);
       setQuoteData(null);
     } finally {
@@ -138,26 +105,14 @@ export default function Market() {
     setIsLoading(true);
 
     try {
-      const data = await fetchMockStockData(tickerSymbol, range);
+      const data = await fetchStockData(tickerSymbol, range);
 
       // Validate we have actual data
       if (!data || data.length === 0) {
         throw new Error("No data available for this time range");
       }
 
-      // Ensure that timestamp is properly converted to Date and mapped to 'x' for chart
-      const formattedData = data.map(point => ({
-        x: new Date(point.timestamp),
-        open: point.open,
-        close: point.close,
-        high: point.high,
-        low: point.low
-      }));
-
-      // Sort chronologically to ensure proper display
-      formattedData.sort((a, b) => a.x.getTime() - b.x.getTime());
-
-      setStockData(formattedData);
+      setStockData(data);
     } catch (err: any) {
       console.error("Error fetching stock data:", err);
       const errorMessage = err.message || 'Unknown error occurred';
@@ -167,42 +122,8 @@ export default function Market() {
     }
   };
 
-  // Get previous close for price comparison
-  const getPreviousClose = (): number => {
-    return quoteData?.previousClose || 0;
-  };
-
-  // Get daily high and low
-  const getDayRange = () => {
-    if (quoteData) {
-      return { 
-        high: quoteData.high || 0, 
-        low: quoteData.low || 0 
-      };
-    }
-    
-    if (stockData.length === 0) return { high: 0, low: 0 };
-    
-    // If quote data doesn't have high/low, try to get from stock data
-    if (timeRange === '1D') {
-      let high = -Infinity;
-      let low = Infinity;
-
-      stockData.forEach(point => {
-        high = Math.max(high, point.high);
-        low = Math.min(low, point.low);
-      });
-
-      return { high, low };
-    }
-
-    // For other time ranges, use the last data point
-    const lastPoint = stockData[stockData.length - 1];
-    return { high: lastPoint.high, low: lastPoint.low };
-  };
-
   const handleTrade = () => {
-    if (!tickerSymbol || !currentPrice) return;
+    if (!tickerSymbol || !quoteData) return;
 
     const parsedQuantity = parseInt(quantity);
     if (isNaN(parsedQuantity) || parsedQuantity <= 0) {
@@ -210,13 +131,13 @@ export default function Market() {
       return;
     }
 
-    const tradeValue = currentPrice * parsedQuantity;
+    const tradeValue = quoteData.price * parsedQuantity;
 
     // Using alert for mock trades
     alert(`${orderType.toUpperCase()} order placed successfully:
       Ticker: ${tickerSymbol}
       Quantity: ${parsedQuantity}
-      Price: $${currentPrice.toFixed(2)}
+      Price: $${quoteData.price.toFixed(2)}
       Total: $${tradeValue.toFixed(2)}`);
   };
 
@@ -249,7 +170,7 @@ export default function Market() {
           {apiConnected === false && (
             <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
               <p className="font-semibold">API Connection Error</p>
-              <p>The application cannot connect to the mock API.</p>
+              <p>The application cannot connect to the Alpaca API.</p>
             </div>
           )}
 
@@ -317,15 +238,10 @@ export default function Market() {
                   {stockData.length > 0 && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
                       <div className="lg:col-span-2">
+                        {/* Use the StockStats component with isIntraday prop */}
                         <StockStats 
                           ticker={tickerSymbol}
-                          currentPrice={currentPrice}
-                          previousClose={getPreviousClose()}
-                          open={stockData[0]?.open || 0}
-                          high={getDayRange().high}
-                          low={getDayRange().low}
-                          volume={stockData[stockData.length - 1]?.volume || 0}
-                          lastUpdated={lastUpdated}
+                          isIntraday={isIntraday}
                         />
                       </div>
 
@@ -379,11 +295,15 @@ export default function Market() {
                         <div className="mb-6">
                           <div className="flex justify-between text-sm mb-1">
                             <span className="text-gray-400">Market Price:</span>
-                            <span className="text-white">${currentPrice.toFixed(2)}</span>
+                            <span className="text-white">
+                              ${quoteData?.price.toFixed(2) || '0.00'}
+                            </span>
                           </div>
                           <div className="flex justify-between font-medium">
                             <span className="text-gray-300">Estimated Total:</span>
-                            <span className="text-white">${(currentPrice * parseInt(quantity || "0")).toFixed(2)}</span>
+                            <span className="text-white">
+                              ${((quoteData?.price || 0) * parseInt(quantity || "0")).toFixed(2)}
+                            </span>
                           </div>
                         </div>
 
