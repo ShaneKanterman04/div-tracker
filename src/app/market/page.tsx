@@ -7,12 +7,12 @@ import PortfolioChart from "@/components/PortfolioChart";
 import StockStats from "@/components/StockStats";
 import { StockDataPoint } from "@/services/stockApi";
 import { 
-  fetchStockData, 
-  getQuote, 
-  verifyApiConnection,
-  setupRealTimeUpdates,
-  AlpacaQuote
-} from "@/services/alpacaApi";
+  fetchMockStockData, 
+  getMockQuote, 
+  verifyMockApiConnection,
+  setupMockRealTimeUpdates,
+  MockQuote
+} from "@/services/mockStockApi";
 import Link from "next/link";
 
 // Available time ranges
@@ -27,7 +27,7 @@ export default function Market() {
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>('1M');
   const [currentPrice, setCurrentPrice] = useState<number>(0);
-  const [quoteData, setQuoteData] = useState<AlpacaQuote | null>(null);
+  const [quoteData, setQuoteData] = useState<MockQuote | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [quantity, setQuantity] = useState<string>("1");
   const [orderType, setOrderType] = useState<"buy" | "sell">("buy");
@@ -37,11 +37,11 @@ export default function Market() {
     // Check API connection on component mount
     async function checkApiConnection() {
       try {
-        const isConnected = await verifyApiConnection();
+        const isConnected = await verifyMockApiConnection();
         setApiConnected(isConnected);
 
         if (!isConnected) {
-          setError("Could not connect to the Alpaca API. Please check your API key and secret.");
+          setError("Could not connect to the mock API.");
         }
       } catch (err) {
         console.error("API connection check failed:", err);
@@ -58,7 +58,7 @@ export default function Market() {
     if (!tickerSymbol) return;
 
     // Set up polling for real-time updates
-    const cleanup = setupRealTimeUpdates(tickerSymbol, (price) => {
+    const cleanup = setupMockRealTimeUpdates(tickerSymbol, (price) => {
       setCurrentPrice(price);
       setLastUpdated(new Date());
     });
@@ -85,19 +85,31 @@ export default function Market() {
 
     try {
       // First get the current quote
-      const quote = await getQuote(ticker);
+      const quote = await getMockQuote(ticker);
       
       // Then get historical data
-      const data = await fetchStockData(ticker, timeRange);
+      const data = await fetchMockStockData(ticker, timeRange);
 
       // Validate we have actual data
       if (!data || data.length === 0) {
         throw new Error("No data available for this ticker");
       }
 
+      // Ensure that timestamp is properly converted to Date and mapped to 'x' for chart
+      const formattedData = data.map(point => ({
+        x: new Date(point.timestamp),
+        open: point.open,
+        close: point.close,
+        high: point.high,
+        low: point.low
+      }));
+
+      // Sort chronologically to ensure proper display
+      formattedData.sort((a, b) => a.x.getTime() - b.x.getTime());
+
       // Update state with the results
       setTickerSymbol(ticker);
-      setStockData(data);
+      setStockData(formattedData);
       setCurrentPrice(quote.price);
       setQuoteData(quote);
       setLastUpdated(quote.timestamp);
@@ -126,17 +138,26 @@ export default function Market() {
     setIsLoading(true);
 
     try {
-      const data = await fetchStockData(tickerSymbol, range);
+      const data = await fetchMockStockData(tickerSymbol, range);
 
       // Validate we have actual data
       if (!data || data.length === 0) {
         throw new Error("No data available for this time range");
       }
 
-      setStockData(data);
-      
-      // Don't update current price when just changing time range
-      // The real-time updater will handle that
+      // Ensure that timestamp is properly converted to Date and mapped to 'x' for chart
+      const formattedData = data.map(point => ({
+        x: new Date(point.timestamp),
+        open: point.open,
+        close: point.close,
+        high: point.high,
+        low: point.low
+      }));
+
+      // Sort chronologically to ensure proper display
+      formattedData.sort((a, b) => a.x.getTime() - b.x.getTime());
+
+      setStockData(formattedData);
     } catch (err: any) {
       console.error("Error fetching stock data:", err);
       const errorMessage = err.message || 'Unknown error occurred';
@@ -191,7 +212,7 @@ export default function Market() {
 
     const tradeValue = currentPrice * parsedQuantity;
 
-    // TODO: Implement actual trade logic with API
+    // Using alert for mock trades
     alert(`${orderType.toUpperCase()} order placed successfully:
       Ticker: ${tickerSymbol}
       Quantity: ${parsedQuantity}
@@ -228,12 +249,7 @@ export default function Market() {
           {apiConnected === false && (
             <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
               <p className="font-semibold">API Connection Error</p>
-              <p>The application cannot connect to the Alpaca API. Please verify:</p>
-              <ul className="list-disc pl-5 mt-1">
-                <li>Your API key and secret are correct in the .env.local file</li>
-                <li>Your Alpaca account is active</li>
-                <li>The API service is currently available</li>
-              </ul>
+              <p>The application cannot connect to the mock API.</p>
             </div>
           )}
 
@@ -293,7 +309,8 @@ export default function Market() {
               ) : (
                 <>
                   <PortfolioChart 
-                    data={stockData} 
+                    ticker={tickerSymbol} 
+                    timeRange={timeRange}
                     title={`${tickerSymbol} (${timeRange})`}
                   />
 

@@ -6,7 +6,7 @@ const ALPACA_API_SECRET = process.env.NEXT_PUBLIC_ALPACA_API_SECRET;
 const ALPACA_API_BASE_URL = process.env.NEXT_PUBLIC_ALPACA_API_BASE_URL || 'https://api.alpaca.markets';
 const ALPACA_DATA_BASE_URL = process.env.NEXT_PUBLIC_ALPACA_DATA_BASE_URL || 'https://data.alpaca.markets';
 
-// Common headers for API requests - updated to match example exactly
+// Common headers for API requests
 const headers = {
   'accept': 'application/json',
   'APCA-API-KEY-ID': ALPACA_API_KEY || '',
@@ -35,6 +35,104 @@ export interface AlpacaQuote {
   low?: number;
   volume?: number;
 }
+
+export interface PortfolioDataPoint {
+  x: Date;
+  open: number;
+  close: number;
+  high: number;
+  low: number;
+}
+
+// Map timeframe string to Alpaca API timeframe format
+const timeframeMap: { [key: string]: string } = {
+  '1D': '15Min',
+  '1W': '1H',
+  '1M': '1D',
+  '3M': '1D',
+  '1Y': '1D',
+  'MAX': '1D'
+};
+
+// Generate appropriate start date based on timeframe
+const getStartDate = (timeframe: string): string => {
+  const now = new Date();
+  let startDate = new Date();
+  
+  switch(timeframe) {
+    case '1D':
+      startDate.setDate(now.getDate() - 1);
+      break;
+    case '1W':
+      startDate.setDate(now.getDate() - 7);
+      break;
+    case '1M':
+      startDate.setMonth(now.getMonth() - 1);
+      break;
+    case '3M':
+      startDate.setMonth(now.getMonth() - 3);
+      break;
+    case '1Y':
+      startDate.setFullYear(now.getFullYear() - 1);
+      break;
+    case 'MAX':
+      startDate.setFullYear(now.getFullYear() - 5); // 5 years of data
+      break;
+    default:
+      startDate.setMonth(now.getMonth() - 1); // Default to 1 month
+  }
+  
+  return startDate.toISOString().split('T')[0];
+};
+
+/**
+ * @deprecated Use the newer fetchStockData function with improved date handling
+ */
+export const fetchStockDataLegacy = async (ticker: string, timeframe: string = '1M'): Promise<PortfolioDataPoint[]> => {
+  const apiKey = process.env.REACT_APP_ALPACA_API_KEY;
+  const apiSecret = process.env.REACT_APP_ALPACA_API_SECRET_KEY;
+  
+  if (!apiKey || !apiSecret) {
+    throw new Error('Alpaca API credentials not found in environment variables');
+  }
+
+  const alpacaTimeframe = timeframeMap[timeframe] || '1D';
+  const startDate = getStartDate(timeframe);
+  
+  const options = {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      'APCA-API-KEY-ID': apiKey,
+      'APCA-API-SECRET-KEY': apiSecret
+    }
+  };
+
+  try {
+    const response = await fetch(
+      `https://data.alpaca.markets/v2/stocks/${ticker.toLowerCase()}/bars?timeframe=${alpacaTimeframe}&start=${startDate}T00:00:00Z&limit=1000&adjustment=raw&feed=iex&sort=asc`, 
+      options
+    );
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+    
+    const data: AlpacaResponse = await response.json();
+    
+    // Transform API response to match our data format
+    return data.bars.map(bar => ({
+      x: new Date(bar.t),
+      open: bar.o,
+      close: bar.c,
+      high: bar.h,
+      low: bar.l
+    }));
+  } catch (error) {
+    console.error('Error fetching stock data:', error);
+    throw error;
+  }
+};
 
 /**
  * Verify the API connection to Alpaca
@@ -79,7 +177,7 @@ export async function getBars(
     url.searchParams.append('end', endDate);
     url.searchParams.append('limit', limit.toString());
     url.searchParams.append('adjustment', 'raw');
-    url.searchParams.append('feed', 'sip'); // Adding feed parameter
+    url.searchParams.append('feed', 'iex'); // Changed from 'sip' to 'iex'
     url.searchParams.append('sort', 'asc'); // Adding sort parameter (ascending)
 
     console.log(`Fetching bars from ${url}`);
@@ -215,6 +313,11 @@ export async function getQuote(symbol: string): Promise<AlpacaQuote> {
  */
 export async function fetchStockData(symbol: string, timeRange: string): Promise<StockDataPoint[]> {
   try {
+    // Validate input parameters
+    if (!symbol) {
+      throw new Error("Symbol is undefined or empty");
+    }
+    
     // Define parameters based on time range
     let timeframe: string;
     let startDate: Date;
@@ -247,43 +350,43 @@ export async function fetchStockData(symbol: string, timeRange: string): Promise
         break;
         
       case '1W':
-        // For 1-week view: use 1-hour candles
-        timeframe = '1Hour';
+        // For 1-week view: use daily candles (UPDATED: changed from 1Hour to 1Day)
+        timeframe = '1Day';
         startDate = new Date(now);
         startDate.setDate(now.getDate() - 7);
         break;
         
       case '1M':
-        // For 1-month view: use daily candles
-        timeframe = '1Day';
+        // For 1-month view: use weekly candles (UPDATED: changed from 1Day to 1Week)
+        timeframe = '1Week';
         startDate = new Date(now);
         startDate.setMonth(now.getMonth() - 1);
         break;
         
       case '3M':
-        // For 3-month view: use daily candles
-        timeframe = '1Day';
+        // For 3-month view: use weekly candles (UPDATED: using weekly for consistency)
+        timeframe = '1Week';
         startDate = new Date(now);
         startDate.setMonth(now.getMonth() - 3);
         break;
         
       case '1Y':
-        // For 1-year view: use daily candles (changed from weekly for more detail)
-        timeframe = '1Day';
+        // For 1-year view: use monthly candles (UPDATED: changed from 1Day to 1Month)
+        timeframe = '1Month';
         startDate = new Date(now);
         startDate.setFullYear(now.getFullYear() - 1);
         break;
         
       case 'MAX':
-        // For max view: use weekly candles, going back 5 years
-        timeframe = '1Week';
+        // For max view: use monthly candles for longer history (UPDATED)
+        timeframe = '1Month';
         startDate = new Date(now);
         startDate.setFullYear(now.getFullYear() - 5);
         break;
         
       default:
-        // Default to daily candles for a month
-        timeframe = '1Day';
+        // Default to weekly candles for a month (UPDATED)
+        timeframe = '1Week';
         startDate = new Date(now);
         startDate.setMonth(now.getMonth() - 1);
     }
@@ -310,53 +413,49 @@ export async function fetchStockData(symbol: string, timeRange: string): Promise
     }
 
     console.log(`Received ${bars.length} bars for ${symbol}`);
+    
+    // Debug the first few bars to check date format
+    if (bars.length > 0) {
+      console.log("First bar timestamp:", bars[0].t);
+      console.log("Sample parsed date:", new Date(bars[0].t));
+    }
 
-    // Transform to app's data format
-    return bars.map(bar => ({
-      x: new Date(bar.t),
-      open: bar.o,
-      high: bar.h,
-      low: bar.l,
-      close: bar.c,
-      volume: bar.v
-    }));
+    // Transform to app's data format with explicit date handling
+    const transformedData = bars.map(bar => {
+      // Explicitly parse the timestamp - Change const to let 
+      let timestamp = new Date(bar.t);
+      
+      // Check if the date is valid
+      if (isNaN(timestamp.getTime())) {
+        console.error("Invalid timestamp found:", bar.t);
+        // Use a fallback date (not ideal but prevents crashes)
+        timestamp = new Date();
+      }
+      
+      return {
+        x: timestamp,
+        open: bar.o,
+        high: bar.h,
+        low: bar.l,
+        close: bar.c,
+        volume: bar.v
+      };
+    });
+    
+    // Sort chronologically to ensure proper display
+    transformedData.sort((a, b) => a.x.getTime() - b.x.getTime());
+    
+    // Log a few data points for debugging
+    if (transformedData.length > 0) {
+      console.log(`First data point: ${transformedData[0].x.toISOString()}, Open: ${transformedData[0].open}, Close: ${transformedData[0].close}`);
+      console.log(`Last data point: ${transformedData[transformedData.length-1].x.toISOString()}, Open: ${transformedData[transformedData.length-1].open}, Close: ${transformedData[transformedData.length-1].close}`);
+    }
+
+    return transformedData;
   } catch (error) {
     console.error(`Error fetching ${timeRange} data for ${symbol}:`, error);
     throw new Error(`Failed to fetch ${timeRange} data for ${symbol}: ${error}`);
   }
-}
-
-/**
- * Set up polling for real-time updates - updated to match example
- */
-export function setupRealTimeUpdates(symbol: string, callback: (price: number) => void): () => void {
-  const intervalId = setInterval(async () => {
-    try {
-      const url = `${ALPACA_DATA_BASE_URL}/v2/stocks/${symbol.toLowerCase()}/trades/latest`;
-      
-      const options = {
-        method: 'GET',
-        headers
-      };
-      
-      const response = await fetch(url, options);
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch latest trade`);
-      }
-
-      const data = await response.json();
-      const price = data.trade?.p;
-
-      if (price) {
-        callback(price);
-      }
-    } catch (error) {
-      console.error(`Error polling for ${symbol} updates:`, error);
-    }
-  }, 10000); // Poll every 10 seconds
-
-  return () => clearInterval(intervalId);
 }
 
 /**
