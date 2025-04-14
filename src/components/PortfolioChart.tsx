@@ -214,38 +214,16 @@ const PortfolioChart: React.FC<PortfolioChartProps> = ({
         <VictoryChart 
           theme={VictoryTheme.material}
           height={height}
-          padding={{ top: 30, bottom: 50, left: 50, right: 10 }} // Reduced left and right padding
+          padding={{ top: 30, bottom: 50, left: 50, right: 10 }}
           scale={{ x: "time" }}
-          domainPadding={{ x: 0, y: 20 }} // Removed x padding to extend to edges
+          domainPadding={{ x: 0, y: 20 }}
           domain={calculateDomain()}
           containerComponent={
             <VictoryVoronoiContainer
               voronoiDimension="x"
               labels={({ datum }) => {
                 const date = new Date(datum.x);
-                let dateStr;
-                
-                if (timeRange === '1D') {
-                  // Format as hours:minutes AM/PM
-                  let hours = date.getHours();
-                  const minutes = date.getMinutes().toString().padStart(2, '0');
-                  const ampm = hours >= 12 ? 'PM' : 'AM';
-                  hours = hours % 12;
-                  hours = hours ? hours : 12; // Convert 0 to 12
-                  dateStr = `${hours}:${minutes} ${ampm}`;
-                } else if (timeRange === '1W') {
-                  // Format as day name and date
-                  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                  dateStr = `${days[date.getDay()]} ${date.getMonth()+1}/${date.getDate()}`;
-                } else if (timeRange === '1Y' || timeRange === 'MAX') {
-                  // Format as month and year
-                  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                                'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                  dateStr = `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
-                } else {
-                  // Format as month/day
-                  dateStr = `${date.getMonth()+1}/${date.getDate()}`;
-                }
+                const dateStr = `${date.getMonth()+1}/${date.getDate()}`;
                 
                 const formattedValue = datum.y.toLocaleString('en-US', {
                   style: 'currency',
@@ -261,15 +239,19 @@ const PortfolioChart: React.FC<PortfolioChartProps> = ({
                   flyoutStyle={{
                     fill: "rgba(33, 33, 33, 0.92)",
                     stroke: "#aaa",
-                    strokeWidth: 1
+                    strokeWidth: 1,
+                    zIndex: 999
                   }}
                   style={{ 
-                    fontSize: 9, 
+                    fontSize: 10, 
                     fill: "white",
-                    fontWeight: 300
+                    fontWeight: 500
                   }}
                   flyoutPadding={{ top: 4, bottom: 4, left: 8, right: 8 }}
                   cornerRadius={3}
+                  pointerLength={5}
+                  constrainToVisibleArea={true}
+                  dy={-10} // Move tooltip upward
                 />
               }
             />

@@ -177,18 +177,14 @@ export async function getBars(
     url.searchParams.append('end', endDate);
     url.searchParams.append('limit', limit.toString());
     url.searchParams.append('adjustment', 'raw');
-    url.searchParams.append('feed', 'iex'); // Changed from 'sip' to 'iex'
-    url.searchParams.append('sort', 'asc'); // Adding sort parameter (ascending)
+    url.searchParams.append('feed', 'iex');
+    url.searchParams.append('sort', 'asc');
 
     console.log(`Fetching bars from ${url}`);
 
     const options = {
       method: 'GET',
-      headers: {
-        accept: 'application/json',
-        'APCA-API-KEY-ID': 'AKHD6IJ0NSXGR0HXNPS2',
-        'APCA-API-SECRET-KEY': 'HCYmQ8PFn7s4yuwsjhXtNPer3dmkpLbdCEsNMbtG'
-      }
+      headers
     };
     
     const response = await fetch(url.toString(), options);

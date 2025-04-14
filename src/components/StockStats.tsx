@@ -11,28 +11,34 @@ const StockStats: React.FC<StockStatsProps> = ({
   isIntraday = false // Default to false
 }) => {
   const [quoteData, setQuoteData] = useState<AlpacaQuote | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [initialLoading, setInitialLoading] = useState<boolean>(true); // Track initial load separately
+  const [refreshing, setRefreshing] = useState<boolean>(false); // Track refreshes separately
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchQuoteData = async () => {
       if (!ticker) {
-        setLoading(false);
+        setInitialLoading(false);
         setError("No ticker provided");
         return;
       }
 
       try {
-        setLoading(true);
+        // Only set refreshing if we already have data
+        if (quoteData) {
+          setRefreshing(true);
+        }
         setError(null);
         const data = await getQuote(ticker);
         setQuoteData(data);
-        // Only show loading on initial fetch
-        setLoading(false);
+        // Always clear loading states after fetch
+        setInitialLoading(false);
+        setRefreshing(false);
       } catch (err) {
         console.error("Error loading quote data:", err);
         setError(`Failed to load data: ${err instanceof Error ? err.message : String(err)}`);
-        setLoading(false);
+        setInitialLoading(false);
+        setRefreshing(false);
       }
     };
 
@@ -42,7 +48,7 @@ const StockStats: React.FC<StockStatsProps> = ({
     // Set up a periodic refresh at different rates based on view type
     const refreshInterval = setInterval(
       fetchQuoteData, 
-      isIntraday ? 2000 : 60000 // 2 seconds for intraday, 60 seconds otherwise
+      isIntraday ? 1000 : 2000 // 5 seconds for intraday, 60 seconds otherwise
     );
     
     // Clean up interval on unmount
@@ -81,7 +87,7 @@ const StockStats: React.FC<StockStatsProps> = ({
 
   return (
     <div className="bg-gray-800 rounded-lg p-4 mt-4">
-      {loading && !quoteData && (
+      {initialLoading && !quoteData && (
         <div className="flex justify-center items-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
         </div>
@@ -93,7 +99,7 @@ const StockStats: React.FC<StockStatsProps> = ({
         </div>
       )}
       
-      {!loading && !error && quoteData && (
+      {!initialLoading && !error && quoteData && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Current price */}
           <div className="col-span-1">
@@ -101,6 +107,9 @@ const StockStats: React.FC<StockStatsProps> = ({
               <div className="text-2xl font-bold text-white flex items-center">
                 {formatCurrency(quoteData.price)}
                 {renderUpdateIndicator()}
+                {refreshing && (
+                  <span className="ml-2 h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
+                )}
               </div>
               <div className={`flex items-center ${quoteData.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                 <span className="text-lg font-medium">
@@ -151,7 +160,7 @@ const StockStats: React.FC<StockStatsProps> = ({
         </div>
       )}
       
-      {!loading && !error && !quoteData && (
+      {!initialLoading && !error && !quoteData && (
         <div className="text-gray-400 py-4 text-center">
           No data available
         </div>
